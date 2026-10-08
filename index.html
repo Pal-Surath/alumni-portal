@@ -1,0 +1,861 @@
+<?php
+require_once __DIR__ . "/functions.php";
+
+// Get a few approved alumni for the homepage
+$featured_alumni = [];
+
+try {
+    $db = get_db_connection();
+
+    $stmt = $db->prepare("
+        SELECT
+            a.user_id,
+            a.full_name,
+            a.email,
+            a.department,
+            a.graduation_year,
+            a.current_company,
+            a.job_title,
+            a.location,
+            a.profile_image
+        FROM alumni a
+        WHERE a.approval_status = 'approved'
+        ORDER BY a.created_at DESC
+        LIMIT 6
+    ");
+
+    if ($stmt) {
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        while ($row = $result->fetch_assoc()) {
+            $featured_alumni[] = $row;
+        }
+
+        $stmt->close();
+    }
+
+} catch (Throwable $e) {
+    // Homepage should still load even if the database is unavailable.
+    $featured_alumni = [];
+}
+
+$total_alumni = 0;
+
+try {
+    $total_alumni = count_alumni("approved");
+} catch (Throwable $e) {
+    $total_alumni = 0;
+}
+
+$current_user = current_user();
+?>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="description"
+        content="College Alumni Management Portal - Connect with alumni, discover opportunities and stay connected with your university community."
+    >
+
+    <meta
+        name="keywords"
+        content="alumni portal, college alumni, university alumni, alumni management system"
+    >
+
+    <meta
+        name="author"
+        content="Visva-Bharati University"
+    >
+
+    <title>
+        <?php echo e(SITE_NAME); ?> | <?php echo e(UNIVERSITY_NAME); ?>
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="assets/css/style.css"
+    >
+</head>
+
+<body>
+
+    <!-- =====================================================
+         NAVIGATION BAR
+    ====================================================== -->
+
+    <header class="site-header">
+
+        <nav class="navbar">
+
+            <div class="container navbar-container">
+
+                <a
+                    href="index.php"
+                    class="site-logo"
+                >
+                    <span class="logo-icon">🎓</span>
+
+                    <span>
+                        <?php echo e(SITE_NAME); ?>
+                    </span>
+                </a>
+
+
+                <button
+                    type="button"
+                    class="menu-toggle"
+                    aria-label="Open navigation menu"
+                    aria-expanded="false"
+                >
+                    ☰
+                </button>
+
+
+                <div class="nav-menu">
+
+                    <a
+                        href="index.php"
+                        class="active"
+                    >
+                        Home
+                    </a>
+
+                    <a href="alumni.php">
+                        Alumni
+                    </a>
+
+                    <a href="search-alumni.php">
+                        Search
+                    </a>
+
+                    <?php if ($current_user): ?>
+
+                        <a href="profile.php">
+                            My Profile
+                        </a>
+
+                        <?php if (is_admin()): ?>
+
+                            <a href="admin/dashboard.php">
+                                Admin
+                            </a>
+
+                        <?php endif; ?>
+
+                        <a href="logout.php">
+                            Logout
+                        </a>
+
+                    <?php else: ?>
+
+                        <a href="login.php">
+                            Login
+                        </a>
+
+                        <a
+                            href="register.php"
+                            class="nav-register"
+                        >
+                            Register
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
+
+            </div>
+
+        </nav>
+
+    </header>
+
+
+    <main>
+
+        <!-- =================================================
+             HERO SECTION
+        ================================================== -->
+
+        <section class="hero">
+
+            <div class="container hero-content">
+
+                <div class="hero-text">
+
+                    <span class="hero-badge">
+                        🎓 <?php echo e(UNIVERSITY_NAME); ?>
+                    </span>
+
+                    <h1>
+                        Connect.
+                        <span>Reconnect.</span>
+                        Grow.
+                    </h1>
+
+                    <p>
+                        Welcome to the
+                        <?php echo e(SITE_NAME); ?> —
+                        a digital community designed to connect
+                        students, graduates and alumni with their
+                        college community.
+                    </p>
+
+
+                    <div class="hero-buttons">
+
+                        <a
+                            href="alumni.php"
+                            class="btn btn-primary"
+                        >
+                            Explore Alumni
+                        </a>
+
+                        <?php if (!$current_user): ?>
+
+                            <a
+                                href="register.php"
+                                class="btn btn-outline"
+                            >
+                                Join the Community
+                            </a>
+
+                        <?php else: ?>
+
+                            <a
+                                href="profile.php"
+                                class="btn btn-outline"
+                            >
+                                View My Profile
+                            </a>
+
+                        <?php endif; ?>
+
+                    </div>
+
+                </div>
+
+
+                <div class="hero-card">
+
+                    <div class="hero-card-icon">
+                        🎓
+                    </div>
+
+                    <h2>
+                        Alumni Community
+                    </h2>
+
+                    <p>
+                        Stay connected with your college
+                        community wherever you are.
+                    </p>
+
+                    <div class="hero-card-stats">
+
+                        <div>
+                            <strong>
+                                <?php echo e($total_alumni); ?>
+                            </strong>
+
+                            <span>
+                                Alumni
+                            </span>
+                        </div>
+
+                        <div>
+                            <strong>
+                                <?php echo e(current_year()); ?>
+                            </strong>
+
+                            <span>
+                                Current Year
+                            </span>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             FEATURES SECTION
+        ================================================== -->
+
+        <section class="section">
+
+            <div class="container">
+
+                <div class="section-heading">
+
+                    <span class="section-label">
+                        FEATURES
+                    </span>
+
+                    <h2>
+                        Everything in One Place
+                    </h2>
+
+                    <p>
+                        A simple platform for managing and
+                        connecting with your alumni community.
+                    </p>
+
+                </div>
+
+
+                <div class="info-grid">
+
+                    <div class="info-card">
+
+                        <div class="info-card-icon">
+                            👥
+                        </div>
+
+                        <h3>
+                            Alumni Directory
+                        </h3>
+
+                        <p>
+                            Browse approved alumni profiles and
+                            discover members of your college
+                            community.
+                        </p>
+
+                        <a href="alumni.php">
+                            View Alumni →
+                        </a>
+
+                    </div>
+
+
+                    <div class="info-card">
+
+                        <div class="info-card-icon">
+                            🔎
+                        </div>
+
+                        <h3>
+                            Find Alumni
+                        </h3>
+
+                        <p>
+                            Search alumni by name, department,
+                            graduation year, company or location.
+                        </p>
+
+                        <a href="search-alumni.php">
+                            Search Now →
+                        </a>
+
+                    </div>
+
+
+                    <div class="info-card">
+
+                        <div class="info-card-icon">
+                            🤝
+                        </div>
+
+                        <h3>
+                            Build Connections
+                        </h3>
+
+                        <p>
+                            Stay connected with classmates,
+                            seniors and graduates from different
+                            batches.
+                        </p>
+
+                        <a href="register.php">
+                            Join Now →
+                        </a>
+
+                    </div>
+
+
+                    <div class="info-card">
+
+                        <div class="info-card-icon">
+                            💼
+                        </div>
+
+                        <h3>
+                            Career Opportunities
+                        </h3>
+
+                        <p>
+                            Discover professional connections,
+                            companies and career opportunities
+                            within the alumni community.
+                        </p>
+
+                        <a href="alumni.php">
+                            Explore →
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             FEATURED ALUMNI
+        ================================================== -->
+
+        <section class="section section-light">
+
+            <div class="container">
+
+                <div class="section-heading">
+
+                    <span class="section-label">
+                        COMMUNITY
+                    </span>
+
+                    <h2>
+                        Meet Our Alumni
+                    </h2>
+
+                    <p>
+                        Discover some of the latest approved
+                        alumni profiles.
+                    </p>
+
+                </div>
+
+
+                <?php if (!empty($featured_alumni)): ?>
+
+                    <div class="alumni-grid">
+
+                        <?php foreach ($featured_alumni as $alumni): ?>
+
+                            <article class="alumni-card">
+
+                                <div class="alumni-card-image">
+
+                                    <?php
+                                    $image_url = profile_image_url(
+                                        $alumni["profile_image"] ?? null
+                                    );
+                                    ?>
+
+                                    <?php if ($image_url): ?>
+
+                                        <img
+                                            src="<?php echo e($image_url); ?>"
+                                            alt="<?php echo e($alumni["full_name"]); ?>"
+                                            loading="lazy"
+                                        >
+
+                                    <?php else: ?>
+
+                                        <div class="profile-placeholder">
+                                            <?php
+                                            echo e(
+                                                strtoupper(
+                                                    substr(
+                                                        $alumni["full_name"],
+                                                        0,
+                                                        1
+                                                    )
+                                                )
+                                            );
+                                            ?>
+                                        </div>
+
+                                    <?php endif; ?>
+
+                                </div>
+
+
+                                <div class="alumni-card-content">
+
+                                    <h3>
+                                        <?php
+                                        echo e(
+                                            $alumni["full_name"]
+                                        );
+                                        ?>
+                                    </h3>
+
+
+                                    <?php if (!empty($alumni["job_title"])): ?>
+
+                                        <p class="alumni-job">
+                                            <?php
+                                            echo e(
+                                                $alumni["job_title"]
+                                            );
+                                            ?>
+                                        </p>
+
+                                    <?php endif; ?>
+
+
+                                    <?php if (!empty($alumni["current_company"])): ?>
+
+                                        <p>
+                                            🏢
+                                            <?php
+                                            echo e(
+                                                $alumni["current_company"]
+                                            );
+                                            ?>
+                                        </p>
+
+                                    <?php endif; ?>
+
+
+                                    <?php if (!empty($alumni["department"])): ?>
+
+                                        <p>
+                                            🎓
+                                            <?php
+                                            echo e(
+                                                $alumni["department"]
+                                            );
+                                            ?>
+                                        </p>
+
+                                    <?php endif; ?>
+
+
+                                    <?php if (!empty($alumni["graduation_year"])): ?>
+
+                                        <p>
+                                            📅
+                                            Class of
+                                            <?php
+                                            echo e(
+                                                $alumni["graduation_year"]
+                                            );
+                                            ?>
+                                        </p>
+
+                                    <?php endif; ?>
+
+
+                                    <?php if (!empty($alumni["location"])): ?>
+
+                                        <p>
+                                            📍
+                                            <?php
+                                            echo e(
+                                                $alumni["location"]
+                                            );
+                                            ?>
+                                        </p>
+
+                                    <?php endif; ?>
+
+                                </div>
+
+                            </article>
+
+                        <?php endforeach; ?>
+
+                    </div>
+
+
+                    <div class="section-action">
+
+                        <a
+                            href="alumni.php"
+                            class="btn btn-primary"
+                        >
+                            View All Alumni
+                        </a>
+
+                    </div>
+
+                <?php else: ?>
+
+                    <div class="empty-state">
+
+                        <div class="empty-state-icon">
+                            👥
+                        </div>
+
+                        <h3>
+                            Alumni Profiles Coming Soon
+                        </h3>
+
+                        <p>
+                            Once alumni start registering and
+                            their profiles are approved, they
+                            will appear here.
+                        </p>
+
+                        <?php if (!$current_user): ?>
+
+                            <a
+                                href="register.php"
+                                class="btn btn-primary"
+                            >
+                                Register as Alumni
+                            </a>
+
+                        <?php endif; ?>
+
+                    </div>
+
+                <?php endif; ?>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             ABOUT SECTION
+        ================================================== -->
+
+        <section class="section">
+
+            <div class="container">
+
+                <div class="about-grid">
+
+                    <div>
+
+                        <span class="section-label">
+                            ABOUT THE PORTAL
+                        </span>
+
+                        <h2>
+                            One Community.
+                            Many Generations.
+                        </h2>
+
+                        <p>
+                            The
+                            <?php echo e(SITE_NAME); ?>
+                            is designed to provide a central
+                            platform where alumni can maintain
+                            their professional and academic
+                            connections.
+                        </p>
+
+                        <p>
+                            Alumni can create profiles, discover
+                            other graduates and stay connected
+                            with the wider university community.
+                        </p>
+
+                        <a
+                            href="register.php"
+                            class="btn btn-primary"
+                        >
+                            Become a Member
+                        </a>
+
+                    </div>
+
+
+                    <div class="about-highlight">
+
+                        <div class="about-highlight-icon">
+                            🌐
+                        </div>
+
+                        <h3>
+                            A Connected Alumni Network
+                        </h3>
+
+                        <p>
+                            Connect with graduates from different
+                            departments, batches and professional
+                            backgrounds.
+                        </p>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             CALL TO ACTION
+        ================================================== -->
+
+        <section class="cta-section">
+
+            <div class="container">
+
+                <div class="cta-content">
+
+                    <h2>
+                        Ready to reconnect?
+                    </h2>
+
+                    <p>
+                        Join the alumni community and stay
+                        connected with your college.
+                    </p>
+
+                    <?php if (!$current_user): ?>
+
+                        <a
+                            href="register.php"
+                            class="btn btn-light"
+                        >
+                            Create Your Profile
+                        </a>
+
+                    <?php else: ?>
+
+                        <a
+                            href="profile.php"
+                            class="btn btn-light"
+                        >
+                            Go to My Profile
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <!-- =====================================================
+         FOOTER
+    ====================================================== -->
+
+    <footer class="site-footer">
+
+        <div class="container">
+
+            <div class="footer-grid">
+
+                <div class="footer-about">
+
+                    <a
+                        href="index.php"
+                        class="footer-logo"
+                    >
+                        🎓 <?php echo e(SITE_NAME); ?>
+                    </a>
+
+                    <p>
+                        Connecting alumni and building a
+                        stronger university community.
+                    </p>
+
+                </div>
+
+
+                <div class="footer-links">
+
+                    <h3>
+                        Quick Links
+                    </h3>
+
+                    <a href="index.php">
+                        Home
+                    </a>
+
+                    <a href="alumni.php">
+                        Alumni
+                    </a>
+
+                    <a href="search-alumni.php">
+                        Search
+                    </a>
+
+                    <?php if (!$current_user): ?>
+
+                        <a href="login.php">
+                            Login
+                        </a>
+
+                        <a href="register.php">
+                            Register
+                        </a>
+
+                    <?php else: ?>
+
+                        <a href="profile.php">
+                            My Profile
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
+
+
+                <div class="footer-links">
+
+                    <h3>
+                        University
+                    </h3>
+
+                    <p>
+                        <?php echo e(UNIVERSITY_NAME); ?>
+                    </p>
+
+                    <p>
+                        <?php echo e(DEPARTMENT_NAME); ?>
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="footer-bottom">
+
+                <p>
+                    &copy;
+                    <span data-current-year></span>
+                    <?php echo e(SITE_NAME); ?>.
+                    All rights reserved.
+                </p>
+
+                <p>
+                    Version
+                    <?php echo e(SITE_VERSION); ?>
+                </p>
+
+            </div>
+
+        </div>
+
+    </footer>
+
+
+    <!-- =====================================================
+         JAVASCRIPT
+    ====================================================== -->
+
+    <script src="assets/js/script.js"></script>
+
+</body>
+
+</html>
+
