@@ -1,205 +1,90 @@
 <?php
-require_once __DIR__ . "/functions.php";
 
-if (is_logged_in()) {
-    redirect("profile.php");
+// ==========================================
+// ALUMNI PORTAL - ADMIN LOGIN
+// ==========================================
+
+require_once "../functions.php";
+
+// If already logged in as admin, go to dashboard
+if (is_logged_in() && is_admin()) {
+    redirect("dashboard.php");
 }
 
-$email = "";
-$flash_messages = [];
+// If logged in as normal alumni, send them to profile
+if (is_logged_in() && !is_admin()) {
+    redirect("../profile.php");
+}
+
+$error = "";
+
+// ------------------------------------------
+// Handle login
+// ------------------------------------------
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
-    // ------------------------------------------------------
-    // CSRF PROTECTION
-    // ------------------------------------------------------
+    try {
 
-    if (
-        !isset($_POST["csrf_token"]) ||
-        !verify_csrf_token($_POST["csrf_token"])
-    ) {
-        set_flash(
-            "error",
-            "Invalid security token. Please refresh the page and try again."
-        );
-
-    } else {
+        // CSRF protection
+        if (!verify_csrf_token($_POST["csrf_token"] ?? "")) {
+            throw new Exception("Invalid security token. Please try again.");
+        }
 
         $email = clean_email($_POST["email"] ?? "");
         $password = $_POST["password"] ?? "";
 
-        $errors = [];
-
-
-        // --------------------------------------------------
-        // VALIDATION
-        // --------------------------------------------------
+        // Validation
+        if ($email === "") {
+            throw new Exception("Please enter your email address.");
+        }
 
         if (!valid_email($email)) {
-            $errors[] = "Please enter a valid email address.";
+            throw new Exception("Please enter a valid email address.");
         }
 
         if ($password === "") {
-            $errors[] = "Please enter your password.";
+            throw new Exception("Please enter your password.");
         }
 
+        // Find user
+        $user = get_user_by_email($email);
 
-        // --------------------------------------------------
-        // LOGIN
-        // --------------------------------------------------
-
-        if (empty($errors)) {
-
-            try {
-
-                $user = get_user_by_email($email);
-
-                if (!$user) {
-
-                    $errors[] =
-                        "Invalid email address or password.";
-
-                } else {
-
-                    // --------------------------------------
-                    // VERIFY PASSWORD
-                    // --------------------------------------
-
-                    if (!verify_password(
-                        $password,
-                        $user["password"]
-                    )) {
-
-                        $errors[] =
-                            "Invalid email address or password.";
-
-                    } else {
-
-                        // ----------------------------------
-                        // CHECK ALUMNI APPROVAL
-                        // ----------------------------------
-
-                        if (
-                            $user["role"] === "alumni"
-                        ) {
-
-                            $alumni =
-                                get_alumni_by_user_id(
-                                    (int)$user["id"]
-                                );
-
-                            if (
-                                $alumni &&
-                                $alumni["approval_status"] !== "approved"
-                            ) {
-
-                                if (
-                                    $alumni["approval_status"] === "pending"
-                                ) {
-
-                                    $errors[] =
-                                        "Your account is waiting for administrator approval.";
-
-                                } elseif (
-                                    $alumni["approval_status"] === "rejected"
-                                ) {
-
-                                    $errors[] =
-                                        "Your alumni profile has been rejected. Please contact the administrator.";
-
-                                } else {
-
-                                    $errors[] =
-                                        "Your account is not currently active.";
-
-                                }
-
-                            }
-
-                        }
-
-
-                        // ----------------------------------
-                        // LOGIN USER
-                        // ----------------------------------
-
-                        if (empty($errors)) {
-
-                            login_user(
-                                (int)$user["id"],
-                                $user["role"]
-                            );
-
-                            // Prevent session fixation
-                            session_regenerate_id(true);
-
-                            set_flash(
-                                "success",
-                                "Welcome back, " .
-                                $user["name"] .
-                                "!"
-                            );
-
-
-                            // --------------------------------
-                            // REDIRECT
-                            // --------------------------------
-
-                            if (
-                                $user["role"] === "admin"
-                            ) {
-
-                                redirect(
-                                    "admin/dashboard.php"
-                                );
-
-                            } else {
-
-                                redirect(
-                                    "profile.php"
-                                );
-
-                            }
-                        }
-                    }
-                }
-
-            } catch (Throwable $e) {
-
-                if (APP_ENV === "development") {
-
-                    $errors[] =
-                        "Login error: " .
-                        $e->getMessage();
-
-                } else {
-
-                    $errors[] =
-                        "Unable to process login. Please try again later.";
-                }
-            }
+        // Only administrators can use this login
+        if (!$user || $user["role"] !== ROLE_ADMIN) {
+            throw new Exception("Invalid administrator email or password.");
         }
 
+        // Verify password
+        if (!verify_password($password, $user["password"])) {
+            throw new Exception("Invalid administrator email or password.");
+        }
 
-        // --------------------------------------------------
-        // STORE ERRORS
-        // --------------------------------------------------
+        // Login admin
+        login_user($user);
 
-        foreach ($errors as $error) {
+        // Regenerate session ID for security
+        session_regenerate_id(true);
 
-            set_flash(
-                "error",
-                $error
-            );
+        set_flash(
+            "success",
+            "Welcome back, Administrator."
+        );
 
+        redirect("dashboard.php");
+
+    } catch (Throwable $e) {
+
+        if (APP_ENV === "development") {
+            $error = $e->getMessage();
+        } else {
+            $error = "Unable to complete administrator login.";
         }
     }
 }
 
-$csrf_token = csrf_token();
-$flash_messages = get_flash_messages();
-
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -214,295 +99,268 @@ $flash_messages = get_flash_messages();
 
     <meta
         name="description"
-        content="Login to the College Alumni Management Portal."
+        content="Administrator login for the Alumni Portal."
     >
 
     <title>
-        Login | <?php echo e(SITE_NAME); ?>
+        Admin Login - <?php echo e(SITE_NAME); ?>
     </title>
 
     <link
         rel="stylesheet"
-        href="assets/css/style.css"
+        href="../assets/css/style.css"
     >
 
 </head>
 
 <body>
 
+<!-- ==========================================
+     NAVBAR
+========================================== -->
 
-    <!-- =====================================================
-         NAVIGATION
-    ====================================================== -->
+<header class="site-header">
 
-    <header class="site-header">
+    <nav class="navbar">
 
-        <nav class="navbar">
+        <div class="container navbar-inner">
 
-            <div class="container navbar-container">
+            <a
+                href="../index.php"
+                class="brand"
+            >
+                <?php echo e(SITE_NAME); ?>
+            </a>
 
-                <a
-                    href="index.php"
-                    class="site-logo"
-                >
+            <button
+                type="button"
+                class="menu-toggle"
+                aria-label="Toggle navigation"
+                aria-expanded="false"
+            >
+                ☰
+            </button>
 
-                    <span class="logo-icon">
-                        🎓
-                    </span>
+            <div class="nav-menu">
 
-                    <span>
-                        <?php echo e(SITE_NAME); ?>
-                    </span>
-
+                <a href="../index.php">
+                    Home
                 </a>
 
+                <a href="../alumni.php">
+                    Alumni
+                </a>
 
-                <button
-                    type="button"
-                    class="menu-toggle"
-                    aria-label="Open navigation menu"
-                    aria-expanded="false"
+                <a href="../search-alumni.php">
+                    Search
+                </a>
+
+                <a
+                    href="login.php"
+                    class="active"
                 >
-                    ☰
-                </button>
-
-
-                <div class="nav-menu">
-
-                    <a href="index.php">
-                        Home
-                    </a>
-
-                    <a href="alumni.php">
-                        Alumni
-                    </a>
-
-                    <a href="search-alumni.php">
-                        Search
-                    </a>
-
-                    <a
-                        href="login.php"
-                        class="active"
-                    >
-                        Login
-                    </a>
-
-                    <a href="register.php">
-                        Register
-                    </a>
-
-                </div>
-
-            </div>
-
-        </nav>
-
-    </header>
-
-
-    <!-- =====================================================
-         LOGIN SECTION
-    ====================================================== -->
-
-    <main>
-
-        <section class="auth-section">
-
-            <div class="container">
-
-                <div class="auth-card auth-card-small">
-
-                    <div class="auth-header">
-
-                        <div class="auth-icon">
-                            🔐
-                        </div>
-
-                        <h1>
-                            Welcome Back
-                        </h1>
-
-                        <p>
-                            Login to access your alumni account.
-                        </p>
-
-                    </div>
-
-
-                    <!-- =====================================
-                         FLASH MESSAGES
-                    ====================================== -->
-
-                    <?php if (!empty($flash_messages)): ?>
-
-                        <div class="flash-messages">
-
-                            <?php foreach (
-                                $flash_messages as $message
-                            ): ?>
-
-                                <div
-                                    class="alert alert-<?php echo e($message["type"]); ?>"
-                                    data-auto-dismiss="7000"
-                                >
-
-                                    <?php
-                                    echo e(
-                                        $message["message"]
-                                    );
-                                    ?>
-
-                                </div>
-
-                            <?php endforeach; ?>
-
-                        </div>
-
-                    <?php endif; ?>
-
-
-                    <!-- =====================================
-                         LOGIN FORM
-                    ====================================== -->
-
-                    <form
-                        method="POST"
-                        action="login.php"
-                        class="auth-form"
-                        data-validate
-                        data-loading
-                    >
-
-                        <input
-                            type="hidden"
-                            name="csrf_token"
-                            value="<?php echo e($csrf_token); ?>"
-                        >
-
-
-                        <div class="form-group">
-
-                            <label for="email">
-                                Email Address
-                                <span>*</span>
-                            </label>
-
-                            <input
-                                type="email"
-                                id="email"
-                                name="email"
-                                value="<?php echo e($email); ?>"
-                                placeholder="Enter your email"
-                                autocomplete="email"
-                                maxlength="150"
-                                required
-                            >
-
-                        </div>
-
-
-                        <div class="form-group">
-
-                            <label for="password">
-                                Password
-                                <span>*</span>
-                            </label>
-
-                            <div class="password-field">
-
-                                <input
-                                    type="password"
-                                    id="password"
-                                    name="password"
-                                    placeholder="Enter your password"
-                                    autocomplete="current-password"
-                                    required
-                                >
-
-                                <button
-                                    type="button"
-                                    class="password-toggle"
-                                    data-target="password"
-                                    aria-label="Show password"
-                                >
-                                    Show
-                                </button>
-
-                            </div>
-
-                        </div>
-
-
-                        <button
-                            type="submit"
-                            class="btn btn-primary btn-full"
-                            data-single-click
-                        >
-                            Login
-                        </button>
-
-
-                        <div class="login-help">
-
-                            <p>
-                                Alumni accounts require administrator
-                                approval before they can log in.
-                            </p>
-
-                        </div>
-
-
-                        <p class="auth-footer-text">
-
-                            Don't have an account?
-
-                            <a href="register.php">
-                                Register as Alumni
-                            </a>
-
-                        </p>
-
-                    </form>
-
-                </div>
-
-            </div>
-
-        </section>
-
-    </main>
-
-
-    <!-- =====================================================
-         FOOTER
-    ====================================================== -->
-
-    <footer class="site-footer">
-
-        <div class="container">
-
-            <div class="footer-bottom">
-
-                <p>
-                    &copy;
-                    <span data-current-year></span>
-                    <?php echo e(SITE_NAME); ?>.
-                    All rights reserved.
-                </p>
-
-                <p>
-                    <?php echo e(UNIVERSITY_NAME); ?>
-                </p>
+                    Admin Login
+                </a>
 
             </div>
 
         </div>
 
-    </footer>
+    </nav>
+
+</header>
 
 
-    <script src="assets/js/script.js"></script>
+<!-- ==========================================
+     ADMIN LOGIN
+========================================== -->
+
+<main>
+
+    <section class="auth-section">
+
+        <div class="container">
+
+            <div class="auth-card">
+
+                <div class="auth-header">
+
+                    <div class="auth-icon">
+                        🔐
+                    </div>
+
+                    <h1>
+                        Administrator Login
+                    </h1>
+
+                    <p>
+                        Sign in to manage the Alumni Portal.
+                    </p>
+
+                </div>
+
+
+                <!-- ERROR MESSAGE -->
+
+                <?php if ($error !== ""): ?>
+
+                    <div class="alert alert-error">
+                        <?php echo e($error); ?>
+                    </div>
+
+                <?php endif; ?>
+
+
+                <!-- FLASH MESSAGES -->
+
+                <?php
+                $flash_messages = get_flash_messages();
+                ?>
+
+                <?php if (!empty($flash_messages)): ?>
+
+                    <?php foreach ($flash_messages as $flash): ?>
+
+                        <div
+                            class="alert alert-<?php echo e($flash["type"]); ?>"
+                            data-auto-dismiss
+                        >
+                            <?php echo e($flash["message"]); ?>
+                        </div>
+
+                    <?php endforeach; ?>
+
+                <?php endif; ?>
+
+
+                <form
+                    method="POST"
+                    action="login.php"
+                    data-validate
+                    data-loading
+                >
+
+                    <?php echo csrf_field(); ?>
+
+
+                    <!-- EMAIL -->
+
+                    <div class="form-group">
+
+                        <label for="email">
+                            Administrator Email
+                        </label>
+
+                        <input
+                            type="email"
+                            id="email"
+                            name="email"
+                            placeholder="Enter administrator email"
+                            value="<?php echo e($_POST["email"] ?? ""); ?>"
+                            autocomplete="email"
+                            required
+                        >
+
+                    </div>
+
+
+                    <!-- PASSWORD -->
+
+                    <div class="form-group">
+
+                        <label for="password">
+                            Password
+                        </label>
+
+                        <div class="password-field">
+
+                            <input
+                                type="password"
+                                id="password"
+                                name="password"
+                                placeholder="Enter administrator password"
+                                autocomplete="current-password"
+                                required
+                            >
+
+                            <button
+                                type="button"
+                                class="password-toggle"
+                                data-target="password"
+                                aria-label="Show password"
+                            >
+                                Show
+                            </button>
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- LOGIN BUTTON -->
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary btn-block"
+                    >
+                        Login as Administrator
+                    </button>
+
+                </form>
+
+
+                <div class="auth-footer">
+
+                    <p>
+                        <a href="../login.php">
+                            Alumni Login
+                        </a>
+                    </p>
+
+                    <p>
+                        <a href="../index.php">
+                            ← Back to Home
+                        </a>
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+</main>
+
+
+<!-- ==========================================
+     FOOTER
+========================================== -->
+
+<footer class="site-footer">
+
+    <div class="container">
+
+        <p>
+            &copy;
+            <span data-current-year></span>
+            <?php echo e(SITE_NAME); ?>.
+            All rights reserved.
+        </p>
+
+        <p>
+            <?php echo e(UNIVERSITY_NAME); ?>
+            |
+            <?php echo e(DEPARTMENT_NAME); ?>
+        </p>
+
+    </div>
+
+</footer>
+
+
+<script src="../assets/js/script.js"></script>
 
 </body>
 

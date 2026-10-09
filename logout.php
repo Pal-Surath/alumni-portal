@@ -1,22 +1,21 @@
 <?php
 
-require_once __DIR__ . "/functions.php";
+require_once "../functions.php";
 
-// Log out the current user
+// Log out the administrator
 logout_user();
 
-// Create a new session for the flash message
-if (session_status() !== PHP_SESSION_ACTIVE) {
+// Start a new session so we can show the flash message
+if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
 set_flash(
     "success",
-    "You have been logged out successfully."
+    "You have been logged out of the administrator account."
 );
 
-// Redirect to login page
+// Return to admin login
 redirect("login.php");
 
 ?>
-
